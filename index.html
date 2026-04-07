@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Research Reports</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f5f5f5; color: #1a1a1a; }
+    header { background: #1a1a2e; color: white; padding: 2rem; }
+    header h1 { font-size: 1.5rem; font-weight: 600; }
+    header p { opacity: 0.6; font-size: 0.9rem; margin-top: 0.3rem; }
+    main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
+    .controls { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    input[type="text"] { flex: 1; padding: 0.6rem 1rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.95rem; min-width: 200px; }
+    .tags-filter { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .tag-btn { padding: 0.35rem 0.75rem; border-radius: 20px; border: 1px solid #ccc; background: white; cursor: pointer; font-size: 0.85rem; transition: all 0.15s; }
+    .tag-btn:hover { border-color: #1a1a2e; }
+    .tag-btn.active { background: #1a1a2e; color: white; border-color: #1a1a2e; }
+    .report-grid { display: grid; gap: 1rem; }
+    .report-card { background: white; border-radius: 8px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+    .report-card.hidden { display: none; }
+    .report-info h2 { font-size: 1rem; font-weight: 500; margin-bottom: 0.4rem; }
+    .report-meta { font-size: 0.8rem; color: #888; margin-bottom: 0.5rem; }
+    .report-tags { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .tag { background: #eef2ff; color: #3730a3; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; cursor: pointer; }
+    .tag:hover { background: #e0e7ff; }
+    .open-btn { display: inline-flex; align-items: center; gap: 0.4rem; background: #1a1a2e; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.85rem; white-space: nowrap; flex-shrink: 0; }
+    .open-btn:hover { background: #2d2d50; }
+    .tag-editor { margin-top: 0.75rem; display: none; }
+    .tag-editor input { padding: 0.3rem 0.6rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.85rem; width: 200px; }
+    .tag-editor button { padding: 0.3rem 0.6rem; background: #1a1a2e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; margin-left: 0.4rem; }
+    .edit-tags-btn { background: none; border: none; color: #aaa; cursor: pointer; font-size: 0.75rem; margin-left: 0.5rem; }
+    .edit-tags-btn:hover { color: #1a1a2e; }
+    .empty { text-align: center; color: #aaa; padding: 3rem; }
+    .status { font-size: 0.8rem; color: #aaa; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>📄 Research Reports</h1>
+    <p>Holmen Energi — Research portal</p>
+  </header>
+  <main>
+    <div class="controls">
+      <input type="text" id="search" placeholder="Sök rapport…" oninput="filterReports()">
+      <div class="tags-filter" id="tagFilter"></div>
+    </div>
+    <div class="status" id="status">Laddar rapporter…</div>
+    <div class="report-grid" id="grid"></div>
+    <div class="empty hidden" id="empty">Inga rapporter matchar filtret.</div>
+  </main>
+
+  <script>
+    // CONFIG — uppdatera SHEET_ID och API_KEY
+    const SHEET_ID = '1304qk_VZc8lj0ww94-_glHw58VTotTXLi9eEJdA1VN8';
+    const API_KEY  = 'DIN_GOOGLE_API_KEY_HÄR';
+    const RANGE    = 'Sheet1!A2:D';
+
+    let reports = [];
+    let activeTag = null;
+
+    async function loadReports() {
+      try {
+        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        const rows = data.values || [];
+        reports = rows.map(r => ({
+          name: r[0] || '',
+          url:  r[1] || '',
+          date: r[2] || '',
+          tags: r[3] ? r[3].split(',').map(t => t.trim()).filter(Boolean) : []
+        }));
+        renderAll();
+      } catch(e) {
+        document.getElementById('status').textContent = 'Kunde inte ladda rapporter. Kontrollera API-nyckel.';
+      }
+    }
+
+    function allTags() {
+      const set = new Set();
+      reports.forEach(r => r.tags.forEach(t => set.add(t)));
+      return [...set].sort();
+    }
+
+    function renderTagFilter() {
+      const tags = allTags();
+      const el = document.getElementById('tagFilter');
+      el.innerHTML = tags.map(t =>
+        `<button class="tag-btn ${activeTag === t ? 'active' : ''}" onclick="toggleTag('${t}')">${t}</button>`
+      ).join('');
+    }
+
+    function toggleTag(tag) {
+      activeTag = activeTag === tag ? null : tag;
+      filterReports();
+    }
+
+    function filterReports() {
+      const q = document.getElementById('search').value.toLowerCase();
+      let visible = 0;
+      document.querySelectorAll('.report-card').forEach((card, i) => {
+        const r = reports[i];
+        const matchSearch = r.name.toLowerCase().includes(q);
+        const matchTag = !activeTag || r.tags.includes(activeTag);
+        const show = matchSearch && matchTag;
+        card.classList.toggle('hidden', !show);
+        if (show) visible++;
+      });
+      document.getElementById('empty').classList.toggle('hidden', visible > 0);
+      document.getElementById('status').textContent = `${visible} av ${reports.length} rapporter`;
+      renderTagFilter();
+    }
+
+    function renderAll() {
+      const grid = document.getElementById('grid');
+      grid.innerHTML = reports.map((r, i) => `
+        <div class="report-card" data-index="${i}">
+          <div class="report-info">
+            <h2>${r.name.replace('.pdf','')}</h2>
+            <div class="report-meta">${r.date}</div>
+            <div class="report-tags">
+              ${r.tags.map(t => `<span class="tag" onclick="toggleTag('${t}')">${t}</span>`).join('')}
+              <button class="edit-tags-btn" onclick="toggleEditor(${i})">✏️ tagga</button>
+            </div>
+            <div class="tag-editor" id="editor-${i}">
+              <input type="text" id="taginput-${i}" placeholder="energi, klimat, marknad…" value="${r.tags.join(', ')}">
+              <button onclick="saveTags(${i})">Spara</button>
+            </div>
+          </div>
+          <a class="open-btn" href="${r.url}" target="_blank">↗ Öppna</a>
+        </div>
+      `).join('');
+      document.getElementById('status').textContent = `${reports.length} rapport${reports.length !== 1 ? 'er' : ''}`;
+      renderTagFilter();
+    }
+
+    function toggleEditor(i) {
+      const el = document.getElementById(`editor-${i}`);
+      el.style.display = el.style.display === 'block' ? 'none' : 'block';
+      if (el.style.display === 'block') document.getElementById(`taginput-${i}`).focus();
+    }
+
+    async function saveTags(i) {
+      const input = document.getElementById(`taginput-${i}`).value;
+      const tags = input.split(',').map(t => t.trim()).filter(Boolean);
+      reports[i].tags = tags;
+
+      // Spara tillbaka till Sheets via Apps Script webhook (sätt upp separat)
+      // För nu: uppdatera lokalt och stäng editor
+      renderAll();
+      alert(`Taggar sparade lokalt: ${tags.join(', ')}\n\nNot: För att spara till Sheets permanent behöver du ett Apps Script webhook.`);
+    }
+
+    loadReports();
+  </script>
+</body>
+</html>
