@@ -11,29 +11,33 @@
     header h1 { font-size: 1.5rem; font-weight: 600; }
     header p { opacity: 0.6; font-size: 0.9rem; margin-top: 0.3rem; }
     main { max-width: 900px; margin: 2rem auto; padding: 0 1rem; }
-    .controls { display: flex; gap: 1rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .controls { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; align-items: center; }
     input[type="text"] { flex: 1; padding: 0.6rem 1rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.95rem; min-width: 200px; }
-    .tags-filter { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: center; }
+    .tags-filter { display: flex; gap: 0.5rem; flex-wrap: wrap; }
     .tag-btn { padding: 0.35rem 0.75rem; border-radius: 20px; border: 1px solid #ccc; background: white; cursor: pointer; font-size: 0.85rem; transition: all 0.15s; }
     .tag-btn:hover { border-color: #1a1a2e; }
     .tag-btn.active { background: #1a1a2e; color: white; border-color: #1a1a2e; }
+    .status { font-size: 0.8rem; color: #aaa; margin-bottom: 1rem; }
     .report-grid { display: grid; gap: 1rem; }
     .report-card { background: white; border-radius: 8px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,0.08); display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
     .report-card.hidden { display: none; }
+    .report-info { flex: 1; }
     .report-info h2 { font-size: 1rem; font-weight: 500; margin-bottom: 0.4rem; }
-    .report-meta { font-size: 0.8rem; color: #888; margin-bottom: 0.5rem; }
-    .report-tags { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    .report-meta { font-size: 0.8rem; color: #888; margin-bottom: 0.6rem; }
+    .report-tags { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
     .tag { background: #eef2ff; color: #3730a3; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; cursor: pointer; }
     .tag:hover { background: #e0e7ff; }
+    .tag-remove { margin-left: 0.3rem; opacity: 0.5; cursor: pointer; }
+    .tag-remove:hover { opacity: 1; }
+    .add-tag-btn { background: none; border: 1px dashed #ccc; color: #aaa; padding: 0.2rem 0.6rem; border-radius: 12px; font-size: 0.75rem; cursor: pointer; }
+    .add-tag-btn:hover { border-color: #1a1a2e; color: #1a1a2e; }
+    .tag-input-wrap { display: none; align-items: center; gap: 0.4rem; }
+    .tag-input-wrap input { padding: 0.2rem 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.8rem; width: 140px; }
+    .tag-input-wrap button { padding: 0.2rem 0.5rem; background: #1a1a2e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; }
     .open-btn { display: inline-flex; align-items: center; gap: 0.4rem; background: #1a1a2e; color: white; padding: 0.5rem 1rem; border-radius: 6px; text-decoration: none; font-size: 0.85rem; white-space: nowrap; flex-shrink: 0; }
     .open-btn:hover { background: #2d2d50; }
-    .tag-editor { margin-top: 0.75rem; display: none; }
-    .tag-editor input { padding: 0.3rem 0.6rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.85rem; width: 200px; }
-    .tag-editor button { padding: 0.3rem 0.6rem; background: #1a1a2e; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.85rem; margin-left: 0.4rem; }
-    .edit-tags-btn { background: none; border: none; color: #aaa; cursor: pointer; font-size: 0.75rem; margin-left: 0.5rem; }
-    .edit-tags-btn:hover { color: #1a1a2e; }
-    .empty { text-align: center; color: #aaa; padding: 3rem; }
-    .status { font-size: 0.8rem; color: #aaa; margin-bottom: 1rem; }
+    .empty { text-align: center; color: #aaa; padding: 3rem; display: none; }
+    .error { background: #fee2e2; color: #991b1b; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; display: none; }
   </style>
 </head>
 <body>
@@ -42,52 +46,56 @@
     <p>Holmen Energi — Research portal</p>
   </header>
   <main>
+    <div class="error" id="error"></div>
     <div class="controls">
       <input type="text" id="search" placeholder="Sök rapport…" oninput="filterReports()">
       <div class="tags-filter" id="tagFilter"></div>
     </div>
-    <div class="status" id="status">Laddar rapporter…</div>
+    <div class="status" id="status">Laddar…</div>
     <div class="report-grid" id="grid"></div>
-    <div class="empty hidden" id="empty">Inga rapporter matchar filtret.</div>
+    <div class="empty" id="empty">Inga rapporter matchar filtret.</div>
   </main>
 
   <script>
-    // CONFIG — uppdatera SHEET_ID och API_KEY
-    const SHEET_ID = '1304qk_VZc8lj0ww94-_glHw58VTotTXLi9eEJdA1VN8';
-    const API_KEY  = 'AIzaSyAFtXAQkWUR8uZWpaXhKzXUnT-U49hngW4';
-    const RANGE    = 'Sheet1!A2:D';
+    const SUPABASE_URL = 'https://rnazsdlmdwidnifurlws.supabase.co';
+    const SUPABASE_KEY = 'sb_publishable_mmlFjLVdLUTrCO373AkF_A_FJa784pw';
 
     let reports = [];
     let activeTag = null;
 
+    async function api(path, method = 'GET', body = null) {
+      const res = await fetch(SUPABASE_URL + path, {
+        method,
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': method === 'PATCH' ? 'return=representation' : ''
+        },
+        body: body ? JSON.stringify(body) : null
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return method === 'PATCH' ? res.json() : res.json();
+    }
+
     async function loadReports() {
       try {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        const rows = data.values || [];
-        reports = rows.map(r => ({
-          name: r[0] || '',
-          url:  r[1] || '',
-          date: r[2] || '',
-          tags: r[3] ? r[3].split(',').map(t => t.trim()).filter(Boolean) : []
-        }));
-        renderAll();
+        reports = await api('/rest/v1/reports?select=*&order=date.desc');
+        render();
       } catch(e) {
-        document.getElementById('status').textContent = 'Kunde inte ladda rapporter. Kontrollera API-nyckel.';
+        showError('Kunde inte ladda rapporter: ' + e.message);
       }
     }
 
     function allTags() {
       const set = new Set();
-      reports.forEach(r => r.tags.forEach(t => set.add(t)));
+      reports.forEach(r => (r.tags || []).forEach(t => set.add(t)));
       return [...set].sort();
     }
 
     function renderTagFilter() {
       const tags = allTags();
-      const el = document.getElementById('tagFilter');
-      el.innerHTML = tags.map(t =>
+      document.getElementById('tagFilter').innerHTML = tags.map(t =>
         `<button class="tag-btn ${activeTag === t ? 'active' : ''}" onclick="toggleTag('${t}')">${t}</button>`
       ).join('');
     }
@@ -103,54 +111,82 @@
       document.querySelectorAll('.report-card').forEach((card, i) => {
         const r = reports[i];
         const matchSearch = r.name.toLowerCase().includes(q);
-        const matchTag = !activeTag || r.tags.includes(activeTag);
+        const matchTag = !activeTag || (r.tags || []).includes(activeTag);
         const show = matchSearch && matchTag;
         card.classList.toggle('hidden', !show);
         if (show) visible++;
       });
-      document.getElementById('empty').classList.toggle('hidden', visible > 0);
-      document.getElementById('status').textContent = `${visible} av ${reports.length} rapporter`;
+      document.getElementById('empty').style.display = visible === 0 ? 'block' : 'none';
+      document.getElementById('status').textContent = `${visible} av ${reports.length} rapport${reports.length !== 1 ? 'er' : ''}`;
       renderTagFilter();
     }
 
-    function renderAll() {
+    function render() {
       const grid = document.getElementById('grid');
       grid.innerHTML = reports.map((r, i) => `
-        <div class="report-card" data-index="${i}">
+        <div class="report-card" data-id="${r.id}">
           <div class="report-info">
-            <h2>${r.name.replace('.pdf','')}</h2>
-            <div class="report-meta">${r.date}</div>
-            <div class="report-tags">
-              ${r.tags.map(t => `<span class="tag" onclick="toggleTag('${t}')">${t}</span>`).join('')}
-              <button class="edit-tags-btn" onclick="toggleEditor(${i})">✏️ tagga</button>
-            </div>
-            <div class="tag-editor" id="editor-${i}">
-              <input type="text" id="taginput-${i}" placeholder="energi, klimat, marknad…" value="${r.tags.join(', ')}">
-              <button onclick="saveTags(${i})">Spara</button>
+            <h2>${r.name}</h2>
+            <div class="report-meta">${r.date || ''}</div>
+            <div class="report-tags" id="tags-${i}">
+              ${(r.tags || []).map(t => `
+                <span class="tag" onclick="toggleTag('${t}')">${t}<span class="tag-remove" onclick="removeTag(event,${i},'${t}')">×</span></span>
+              `).join('')}
+              <button class="add-tag-btn" onclick="showTagInput(${i})">+ tagg</button>
+              <div class="tag-input-wrap" id="taginput-wrap-${i}">
+                <input type="text" id="taginput-${i}" placeholder="t.ex. klimat" onkeydown="if(event.key==='Enter')saveTag(${i})">
+                <button onclick="saveTag(${i})">Spara</button>
+              </div>
             </div>
           </div>
           <a class="open-btn" href="${r.url}" target="_blank">↗ Öppna</a>
         </div>
       `).join('');
       document.getElementById('status').textContent = `${reports.length} rapport${reports.length !== 1 ? 'er' : ''}`;
+      document.getElementById('empty').style.display = 'none';
       renderTagFilter();
     }
 
-    function toggleEditor(i) {
-      const el = document.getElementById(`editor-${i}`);
-      el.style.display = el.style.display === 'block' ? 'none' : 'block';
-      if (el.style.display === 'block') document.getElementById(`taginput-${i}`).focus();
+    function showTagInput(i) {
+      const wrap = document.getElementById(`taginput-wrap-${i}`);
+      wrap.style.display = wrap.style.display === 'flex' ? 'none' : 'flex';
+      if (wrap.style.display === 'flex') document.getElementById(`taginput-${i}`).focus();
     }
 
-    async function saveTags(i) {
-      const input = document.getElementById(`taginput-${i}`).value;
-      const tags = input.split(',').map(t => t.trim()).filter(Boolean);
-      reports[i].tags = tags;
+    async function saveTag(i) {
+      const input = document.getElementById(`taginput-${i}`);
+      const tag = input.value.trim();
+      if (!tag) return;
+      const r = reports[i];
+      const newTags = [...new Set([...(r.tags || []), tag])];
+      await updateTags(i, newTags);
+      input.value = '';
+      document.getElementById(`taginput-wrap-${i}`).style.display = 'none';
+    }
 
-      // Spara tillbaka till Sheets via Apps Script webhook (sätt upp separat)
-      // För nu: uppdatera lokalt och stäng editor
-      renderAll();
-      alert(`Taggar sparade lokalt: ${tags.join(', ')}\n\nNot: För att spara till Sheets permanent behöver du ett Apps Script webhook.`);
+    async function removeTag(e, i, tag) {
+      e.stopPropagation();
+      const r = reports[i];
+      const newTags = (r.tags || []).filter(t => t !== tag);
+      await updateTags(i, newTags);
+    }
+
+    async function updateTags(i, newTags) {
+      const r = reports[i];
+      try {
+        await api(`/rest/v1/reports?id=eq.${r.id}`, 'PATCH', { tags: newTags });
+        reports[i].tags = newTags;
+        render();
+        filterReports();
+      } catch(e) {
+        showError('Kunde inte spara taggar: ' + e.message);
+      }
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('error');
+      el.textContent = msg;
+      el.style.display = 'block';
     }
 
     loadReports();
