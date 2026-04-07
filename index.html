@@ -80,7 +80,7 @@
 
     async function loadReports() {
       try {
-        reports = await api('/rest/v1/reports?select=*&order=date.desc');
+        reports = await api('/rest/v1/reports?select=*,publishers(name,short_name,website)&order=published_date.desc.nullslast');
         render();
       } catch(e) {
         showError('Kunde inte ladda rapporter: ' + e.message);
@@ -126,8 +126,11 @@
       grid.innerHTML = reports.map((r, i) => `
         <div class="report-card" data-id="${r.id}">
           <div class="report-info">
-            <h2>${r.name}</h2>
-            <div class="report-meta">${r.date || ''}</div>
+            <h2>${r.display_name || r.name}</h2>
+            <div class="report-meta">
+              ${r.publishers ? `<a href="${r.publishers.website}" target="_blank" style="color:#3730a3;text-decoration:none">${r.publishers.name}</a> &nbsp;·&nbsp; ` : ''}
+              ${r.published_date || r.date || ''}
+            </div>
             <div class="report-tags" id="tags-${i}">
               ${(r.tags || []).map(t => `
                 <span class="tag" onclick="toggleTag('${t}')">${t}<span class="tag-remove" onclick="removeTag(event,${i},'${t}')">×</span></span>
